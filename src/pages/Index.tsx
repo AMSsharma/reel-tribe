@@ -1,6 +1,6 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import VideoCard, { VideoData } from '@/components/VideoCard';
+import BottomNav from '@/components/BottomNav';
 
 // Mock data for videos
 const MOCK_VIDEOS: VideoData[] = [
@@ -118,26 +118,39 @@ const Index = () => {
   }, [activeVideoIndex, videos.length]);
 
   return (
-    <div className="flex flex-col h-screen bg-black">
-      <div 
-        ref={scrollContainerRef}
-        className="scroll-container flex-1 overflow-y-auto"
-      >
-        {videos.map((video, index) => (
-          <VideoCard 
-            key={video.id} 
-            video={video} 
-            isActive={index === activeVideoIndex}
-            onActive={() => setActiveVideoIndex(index)}
-          />
-        ))}
-        
-        {isLoading && (
-          <div className="flex justify-center items-center py-8">
-            <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-          </div>
-        )}
-      </div>
+    <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-900">
+      {/* Header */}
+      <header className="fixed top-0 left-0 right-0 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 z-50">
+        <div className="flex justify-between items-center px-4 h-14">
+          <h1 className="text-xl font-semibold">ShortWatch</h1>
+        </div>
+      </header>
+
+      {/* Main content */}
+      <main className="flex-1 mt-14 mb-16">
+        <div 
+          ref={scrollContainerRef}
+          className="scroll-container max-w-md mx-auto"
+        >
+          {videos.map((video, index) => (
+            <VideoCard 
+              key={video.id} 
+              video={video} 
+              isActive={index === activeVideoIndex}
+              onActive={() => setActiveVideoIndex(index)}
+            />
+          ))}
+          
+          {isLoading && (
+            <div className="flex justify-center items-center py-8">
+              <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          )}
+        </div>
+      </main>
+
+      {/* Bottom Navigation */}
+      <BottomNav />
     </div>
   );
 };

@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Link } from 'react-router-dom';
 import VideoPlayer from './VideoPlayer';
@@ -28,7 +27,6 @@ interface VideoCardProps {
 const VideoCard: React.FC<VideoCardProps> = ({ video, isActive, onActive }) => {
   const [cardRef, isIntersecting] = useIntersectionObserver<HTMLDivElement>({ threshold: 0.7 });
   
-  // Trigger onActive callback when card becomes visible
   React.useEffect(() => {
     if (isIntersecting && onActive) {
       onActive();
@@ -38,52 +36,49 @@ const VideoCard: React.FC<VideoCardProps> = ({ video, isActive, onActive }) => {
   return (
     <div 
       ref={cardRef} 
-      className="scroll-item w-full h-full flex items-center justify-center"
+      className="scroll-item bg-white dark:bg-gray-800 shadow-sm rounded-lg overflow-hidden mb-4 mx-4"
     >
-      <div className="video-card max-w-md w-full mx-auto animate-fade-in">
+      <div className="p-3 flex items-center space-x-2">
+        <Link 
+          to={`/creator/${video.creator.id}`}
+          className="flex items-center space-x-2"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <img 
+            src={video.creator.avatar} 
+            alt={video.creator.name}
+            className="w-8 h-8 rounded-full object-cover" 
+          />
+          <span className="font-medium text-sm dark:text-white">{video.creator.name}</span>
+        </Link>
+      </div>
+
+      <div className="relative aspect-square">
         <VideoPlayer 
           src={video.videoUrl} 
           poster={video.thumbnailUrl}
           isActive={isActive}
         />
-        
-        <div className="video-controls-overlay">
-          <div className="flex items-start justify-between">
-            <Link 
-              to={`/creator/${video.creator.id}`}
-              className="flex items-center space-x-2 p-2 rounded-full bg-black/20 backdrop-blur-sm"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <img 
-                src={video.creator.avatar} 
-                alt={video.creator.name}
-                className="w-8 h-8 rounded-full object-cover border border-white/30" 
-              />
-              <span className="text-white font-medium text-sm">{video.creator.name}</span>
-            </Link>
-          </div>
-          
-          <div className="flex justify-between items-end">
-            <div className="max-w-[70%]">
-              <Link to={`/video/${video.id}`} className="block" onClick={(e) => e.stopPropagation()}>
-                <h3 className="text-white text-lg font-semibold mb-2 line-clamp-2">{video.title}</h3>
-              </Link>
-              <Link 
-                to={`/video/${video.id}`}
-                className="text-white/80 text-xs underline underline-offset-2"
-                onClick={(e) => e.stopPropagation()}
-              >
-                View Details
-              </Link>
-            </div>
-            
-            <EngagementButtons 
-              videoId={video.id} 
-              youtubeUrl={video.youtubeUrl}
-              className="mr-2"
-            />
-          </div>
+      </div>
+
+      <div className="p-3">
+        <div className="flex justify-between items-start mb-2">
+          <Link 
+            to={`/video/${video.id}`} 
+            className="text-sm font-medium dark:text-white line-clamp-2"
+          >
+            {video.title}
+          </Link>
+          <EngagementButtons 
+            videoId={video.id} 
+            youtubeUrl={video.youtubeUrl}
+          />
         </div>
+        {video.description && (
+          <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2">
+            {video.description}
+          </p>
+        )}
       </div>
     </div>
   );
