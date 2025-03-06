@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import VideoCard, { VideoData } from '@/components/VideoCard';
 import BottomNav from '@/components/BottomNav';
@@ -118,11 +119,11 @@ const Index = () => {
   }, [activeVideoIndex, videos.length]);
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="flex flex-col min-h-screen app-background">
       {/* Header */}
-      <header className="fixed top-0 left-0 right-0 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 z-50">
+      <header className="fixed top-0 left-0 right-0 bg-white/70 dark:bg-gray-900/70 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 z-50">
         <div className="flex justify-between items-center px-4 h-14">
-          <h1 className="text-xl font-semibold">ShortWatch</h1>
+          <h1 className="text-xl font-semibold bg-gradient-to-r from-purple-600 via-pink-600 to-red-600 bg-clip-text text-transparent">ShortWatch</h1>
         </div>
       </header>
 

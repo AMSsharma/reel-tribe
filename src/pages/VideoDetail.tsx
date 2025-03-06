@@ -5,6 +5,7 @@ import { ArrowLeft, ExternalLink } from 'lucide-react';
 import VideoPlayer from '@/components/VideoPlayer';
 import EngagementButtons from '@/components/EngagementButtons';
 import { VideoData } from '@/components/VideoCard';
+import BottomNav from '@/components/BottomNav';
 
 // Mock data (in a real app, this would come from an API)
 const MOCK_VIDEOS: VideoData[] = [
@@ -117,14 +118,14 @@ const VideoDetail = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-4xl mx-auto p-6 animate-fade-in">
+    <div className="min-h-screen app-background">
+      <div className="max-w-4xl mx-auto p-6 animate-fade-in pb-20">
         <Link to="/" className="inline-flex items-center text-primary hover:underline mb-6">
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back to Feed
         </Link>
         
-        <div className="rounded-xl overflow-hidden aspect-video mb-6 bg-black">
+        <div className="rounded-xl overflow-hidden aspect-video mb-6 bg-black shadow-lg">
           <VideoPlayer 
             src={video.videoUrl} 
             poster={video.thumbnailUrl}
@@ -133,14 +134,14 @@ const VideoDetail = () => {
         </div>
         
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6 mb-8">
-          <div className="flex-1">
-            <h1 className="text-2xl font-bold mb-2">{video.title}</h1>
+          <div className="flex-1 bg-white/70 dark:bg-gray-800/50 backdrop-blur-md rounded-xl p-6 shadow-sm">
+            <h1 className="text-2xl font-bold mb-2 bg-gradient-to-r from-purple-600 via-pink-600 to-red-600 bg-clip-text text-transparent">{video.title}</h1>
             
             <div className="flex items-center space-x-3 mb-4">
               <img 
                 src={video.creator.avatar} 
                 alt={video.creator.name}
-                className="w-10 h-10 rounded-full object-cover" 
+                className="w-10 h-10 rounded-full object-cover border-2 border-pink-500" 
               />
               <Link to={`/creator/${video.creator.id}`} className="font-medium hover:underline">
                 {video.creator.name}
@@ -153,7 +154,7 @@ const VideoDetail = () => {
               href={video.youtubeUrl}
               target="_blank"
               rel="noopener noreferrer" 
-              className="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground rounded-md transition-colors hover:bg-primary/90"
+              className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-purple-600 via-pink-600 to-red-600 text-white rounded-md transition-all hover:shadow-lg"
             >
               <ExternalLink className="w-4 h-4 mr-2" />
               Watch Full Video on YouTube
@@ -171,13 +172,13 @@ const VideoDetail = () => {
         </div>
         
         <div className="mt-10">
-          <h2 className="text-xl font-semibold mb-4">More Videos</h2>
+          <h2 className="text-xl font-semibold mb-4 bg-gradient-to-r from-purple-600 via-pink-600 to-red-600 bg-clip-text text-transparent">More Videos</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {relatedVideos.map(related => (
               <Link 
                 key={related.id}
                 to={`/video/${related.id}`}
-                className="group rounded-lg overflow-hidden bg-card hover:bg-card/80 transition-colors"
+                className="group rounded-lg overflow-hidden bg-white/70 dark:bg-gray-800/50 backdrop-blur-md hover:shadow-md transition-all"
               >
                 <div className="aspect-video relative overflow-hidden">
                   <img 
@@ -187,7 +188,7 @@ const VideoDetail = () => {
                   />
                 </div>
                 <div className="p-3">
-                  <h3 className="font-medium line-clamp-2 group-hover:text-primary transition-colors">
+                  <h3 className="font-medium line-clamp-2 group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:from-purple-600 group-hover:via-pink-600 group-hover:to-red-600 transition-colors">
                     {related.title}
                   </h3>
                   <p className="text-sm text-muted-foreground mt-1">
@@ -199,6 +200,7 @@ const VideoDetail = () => {
           </div>
         </div>
       </div>
+      <BottomNav />
     </div>
   );
 };
