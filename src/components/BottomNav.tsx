@@ -1,5 +1,5 @@
 
-import { Home, User, Search, Heart } from "lucide-react";
+import { Home, User, Search, MessageCircle } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 
 const BottomNav = () => {
@@ -33,15 +33,15 @@ const BottomNav = () => {
           <span className="text-xs mt-1">Search</span>
         </Link>
         <Link 
-          to="/activity" 
+          to="/syts" 
           className={`flex flex-col items-center ${
-            isActive('/activity') 
+            isActive('/syts') 
               ? 'text-transparent bg-clip-text bg-gradient-to-r from-purple-600 via-pink-600 to-red-600' 
               : 'text-gray-500'
           }`}
         >
-          <Heart className={`w-6 h-6 ${isActive('/activity') ? 'stroke-[#ea384c]' : ''}`} />
-          <span className="text-xs mt-1">Activity</span>
+          <MessageCircle className={`w-6 h-6 ${isActive('/syts') ? 'stroke-[#ea384c]' : ''}`} />
+          <span className="text-xs mt-1">SYTS</span>
         </Link>
         <Link 
           to="/profile" 
