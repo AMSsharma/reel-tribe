@@ -1,69 +1,32 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import VideoCard, { VideoData } from '@/components/VideoCard';
+import VideoCard from '@/components/VideoCard';
 import BottomNav from '@/components/BottomNav';
-
-// Mock data for videos
-const MOCK_VIDEOS: VideoData[] = [
-  {
-    id: '1',
-    title: 'How to Master Swift in 10 Minutes',
-    creator: {
-      id: 'creator1',
-      name: 'TechMaster',
-      avatar: 'https://i.pravatar.cc/150?img=1',
-    },
-    videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-woman-typing-on-a-laptop-in-a-cafe-38958-large.mp4',
-    thumbnailUrl: 'https://i.imgur.com/A8eQsll.jpg',
-    youtubeUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-    description: 'Learn the basics of Swift programming in this quick tutorial.',
-  },
-  {
-    id: '2',
-    title: 'Building a Modern Website with Tailwind CSS',
-    creator: {
-      id: 'creator2',
-      name: 'CodeArtist',
-      avatar: 'https://i.pravatar.cc/150?img=2',
-    },
-    videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-young-woman-working-on-her-laptop-at-home-4806-large.mp4',
-    thumbnailUrl: 'https://i.imgur.com/JjkZMYR.jpg',
-    youtubeUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-    description: 'Discover how to use Tailwind CSS to build beautiful, responsive websites quickly.',
-  },
-  {
-    id: '3',
-    title: 'The Future of AI in 2023',
-    creator: {
-      id: 'creator3',
-      name: 'FutureTech',
-      avatar: 'https://i.pravatar.cc/150?img=3',
-    },
-    videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-man-in-a-suit-working-on-a-financial-analysis-29910-large.mp4',
-    thumbnailUrl: 'https://i.imgur.com/HVaYXQF.jpg',
-    youtubeUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-    description: 'An overview of what to expect from artificial intelligence advancements in 2023.',
-  },
-  {
-    id: '4',
-    title: 'Mastering React Hooks',
-    creator: {
-      id: 'creator4',
-      name: 'ReactMaster',
-      avatar: 'https://i.pravatar.cc/150?img=4',
-    },
-    videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-woman-working-on-her-laptop-4847-large.mp4',
-    thumbnailUrl: 'https://i.imgur.com/JmA9vXs.jpg',
-    youtubeUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-    description: 'Learn how to effectively use React Hooks in your projects.',
-  },
-];
+import { VideoData } from '@/types/video';
+import { getAllVideos } from '@/services/videoService';
 
 const Index = () => {
-  const [videos, setVideos] = useState<VideoData[]>(MOCK_VIDEOS);
+  const [videos, setVideos] = useState<VideoData[]>([]);
   const [activeVideoIndex, setActiveVideoIndex] = useState(0);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  
+  // Fetch initial videos
+  useEffect(() => {
+    const fetchVideos = async () => {
+      setIsLoading(true);
+      try {
+        const fetchedVideos = await getAllVideos();
+        setVideos(fetchedVideos);
+      } catch (error) {
+        console.error('Error fetching videos:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchVideos();
+  }, []);
   
   // Simulate infinite scrolling by appending more videos when reaching the end
   const loadMoreVideos = () => {
@@ -71,18 +34,33 @@ const Index = () => {
     
     setIsLoading(true);
     
-    // In a real app, this would be an API call to fetch more videos
-    setTimeout(() => {
-      // Add shuffled versions of the same videos (for demo purposes)
-      const newVideos = [...MOCK_VIDEOS]
-        .map(video => ({ 
-          ...video, 
-          id: `${video.id}-${Math.random().toString(36).substring(7)}` 
-        }))
-        .sort(() => Math.random() - 0.5);
+    // In a real app, this would be an API call to fetch more videos with pagination
+    setTimeout(async () => {
+      try {
+        // Try to get more real videos first
+        const existingIds = videos.map(v => v.id);
+        const moreVideos = await getAllVideos();
+        const newVideos = moreVideos.filter(v => !existingIds.includes(v.id));
         
-      setVideos(prevVideos => [...prevVideos, ...newVideos]);
-      setIsLoading(false);
+        if (newVideos.length > 0) {
+          setVideos(prevVideos => [...prevVideos, ...newVideos]);
+        } else {
+          // Fall back to shuffled versions of the same videos (for demo purposes)
+          const shuffledVideos = [...videos]
+            .sort(() => Math.random() - 0.5)
+            .slice(0, 5)
+            .map(video => ({ 
+              ...video, 
+              id: `${video.id}-${Math.random().toString(36).substring(7)}` 
+            }));
+            
+          setVideos(prevVideos => [...prevVideos, ...shuffledVideos]);
+        }
+      } catch (error) {
+        console.error('Error loading more videos:', error);
+      } finally {
+        setIsLoading(false);
+      }
     }, 1500);
   };
   
@@ -129,25 +107,31 @@ const Index = () => {
 
       {/* Main content */}
       <main className="flex-1 mt-14 mb-16">
-        <div 
-          ref={scrollContainerRef}
-          className="scroll-container max-w-md mx-auto"
-        >
-          {videos.map((video, index) => (
-            <VideoCard 
-              key={video.id} 
-              video={video} 
-              isActive={index === activeVideoIndex}
-              onActive={() => setActiveVideoIndex(index)}
-            />
-          ))}
-          
-          {isLoading && (
-            <div className="flex justify-center items-center py-8">
-              <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
-            </div>
-          )}
-        </div>
+        {videos.length === 0 && isLoading ? (
+          <div className="flex justify-center items-center h-[70vh]">
+            <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        ) : (
+          <div 
+            ref={scrollContainerRef}
+            className="scroll-container max-w-md mx-auto"
+          >
+            {videos.map((video, index) => (
+              <VideoCard 
+                key={video.id} 
+                video={video} 
+                isActive={index === activeVideoIndex}
+                onActive={() => setActiveVideoIndex(index)}
+              />
+            ))}
+            
+            {isLoading && (
+              <div className="flex justify-center items-center py-8">
+                <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            )}
+          </div>
+        )}
       </main>
 
       {/* Bottom Navigation */}

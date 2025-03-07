@@ -5,9 +5,10 @@ import { toast as sonnerToast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { Loader2 } from "lucide-react";
+import { Loader2, Share } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import VideoPlayer from './VideoPlayer';
+import { storeProcessedVideo } from '@/services/videoService';
 
 interface SummaryResult {
   videoId: string;
@@ -29,6 +30,7 @@ const YouTubeSummarizer: React.FC = () => {
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<SummaryResult | null>(null);
+  const [savingToSYTS, setSavingToSYTS] = useState(false);
   const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -70,10 +72,31 @@ const YouTubeSummarizer: React.FC = () => {
   const shareToSYTS = async () => {
     if (!result) return;
     
-    sonnerToast.success('This feature will be implemented soon!');
+    setSavingToSYTS(true);
     
-    // In a real implementation, this would save the video to a database
-    // and make it available in the SYTS (Share YouTube Short) feed
+    try {
+      const { success, id, error } = await storeProcessedVideo({
+        youtubeId: result.videoId,
+        title: result.videoDetails.title,
+        description: result.videoDetails.description,
+        thumbnailUrl: result.videoDetails.thumbnailUrl,
+        channel: result.videoDetails.channel,
+        publishedAt: result.videoDetails.publishedAt,
+        viewCount: parseInt(result.videoDetails.viewCount),
+        likeCount: parseInt(result.videoDetails.likeCount),
+        summary: result.summary
+      });
+      
+      if (!success) throw error;
+      
+      sonnerToast.success('Video has been shared to SYTS feed!');
+      
+    } catch (error) {
+      console.error('Error saving to SYTS:', error);
+      sonnerToast.error('Failed to share to SYTS: ' + (error.message || 'Unknown error'));
+    } finally {
+      setSavingToSYTS(false);
+    }
   };
 
   return (
@@ -139,8 +162,19 @@ const YouTubeSummarizer: React.FC = () => {
               <Button 
                 onClick={shareToSYTS}
                 className="bg-gradient-to-r from-purple-600 via-pink-600 to-red-600 text-white"
+                disabled={savingToSYTS}
               >
-                Share to SYTS Feed
+                {savingToSYTS ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Sharing...
+                  </>
+                ) : (
+                  <>
+                    <Share className="mr-2 h-4 w-4" />
+                    Share to SYTS Feed
+                  </>
+                )}
               </Button>
             </div>
           </div>

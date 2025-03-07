@@ -1,5 +1,6 @@
 
-import { VideoData } from '@/types/video';
+import { VideoData, ShortVideo } from '@/types/video';
+import { supabase } from '@/integrations/supabase/client';
 
 // Mock data (in a real app, this would come from an API)
 const MOCK_VIDEOS: VideoData[] = [
@@ -57,20 +58,152 @@ const MOCK_VIDEOS: VideoData[] = [
   },
 ];
 
-export const getVideoById = (id: string): Promise<VideoData | null> => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      const video = MOCK_VIDEOS.find(v => v.id === id) || null;
-      resolve(video);
-    }, 500);
-  });
+export const getVideoById = async (id: string): Promise<VideoData | null> => {
+  try {
+    // First check if this is a processed short video from our database
+    const { data: shortVideo, error } = await supabase
+      .from('short_videos')
+      .select('*')
+      .eq('id', id)
+      .single();
+    
+    if (shortVideo && !error) {
+      return convertShortVideoToVideoData(shortVideo);
+    }
+    
+    // Fall back to mock data if not found in database
+    const video = MOCK_VIDEOS.find(v => v.id === id) || null;
+    return video;
+  } catch (error) {
+    console.error('Error fetching video:', error);
+    // Fall back to mock data
+    const video = MOCK_VIDEOS.find(v => v.id === id) || null;
+    return video;
+  }
 };
 
-export const getRelatedVideos = (currentVideoId: string): Promise<VideoData[]> => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      const videos = MOCK_VIDEOS.filter(v => v.id !== currentVideoId);
-      resolve(videos);
-    }, 500);
-  });
+export const getRelatedVideos = async (currentVideoId: string): Promise<VideoData[]> => {
+  try {
+    // Get short videos from our database
+    const { data: shortVideos, error } = await supabase
+      .from('short_videos')
+      .select('*')
+      .limit(10);
+    
+    if (shortVideos && shortVideos.length > 0 && !error) {
+      const videos = shortVideos
+        .filter(video => video.id !== currentVideoId)
+        .map(convertShortVideoToVideoData);
+      
+      // If we have less than 3 videos, add some mock data
+      if (videos.length < 3) {
+        const mockVideos = MOCK_VIDEOS.filter(v => v.id !== currentVideoId);
+        return [...videos, ...mockVideos].slice(0, 5);
+      }
+      
+      return videos;
+    }
+    
+    // Fall back to mock data
+    const videos = MOCK_VIDEOS.filter(v => v.id !== currentVideoId);
+    return videos;
+  } catch (error) {
+    console.error('Error fetching related videos:', error);
+    // Fall back to mock data
+    const videos = MOCK_VIDEOS.filter(v => v.id !== currentVideoId);
+    return videos;
+  }
+};
+
+export const getAllVideos = async (): Promise<VideoData[]> => {
+  try {
+    // Get short videos from our database
+    const { data: shortVideos, error } = await supabase
+      .from('short_videos')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(20);
+    
+    if (shortVideos && shortVideos.length > 0 && !error) {
+      const videos = shortVideos.map(convertShortVideoToVideoData);
+      
+      // If we have less than 5 videos, add some mock data
+      if (videos.length < 5) {
+        return [...videos, ...MOCK_VIDEOS].slice(0, MOCK_VIDEOS.length + videos.length);
+      }
+      
+      return videos;
+    }
+    
+    // Fall back to mock data
+    return MOCK_VIDEOS;
+  } catch (error) {
+    console.error('Error fetching all videos:', error);
+    // Fall back to mock data
+    return MOCK_VIDEOS;
+  }
+};
+
+// Helper function to convert ShortVideo from Supabase to VideoData format
+const convertShortVideoToVideoData = (shortVideo: ShortVideo): VideoData => {
+  return {
+    id: shortVideo.id,
+    title: shortVideo.title,
+    creator: {
+      id: `creator-${shortVideo.youtube_id}`,
+      name: shortVideo.channel,
+      avatar: `https://i.pravatar.cc/150?u=${shortVideo.youtube_id}`,
+    },
+    videoUrl: shortVideo.preview_url || `https://www.youtube.com/embed/${shortVideo.youtube_id}`,
+    thumbnailUrl: shortVideo.thumbnail_url || 'https://i.imgur.com/A8eQsll.jpg',
+    youtubeUrl: `https://www.youtube.com/watch?v=${shortVideo.youtube_id}`,
+    description: shortVideo.description || undefined,
+    youtubeId: shortVideo.youtube_id,
+    viewCount: shortVideo.view_count || undefined,
+    likeCount: shortVideo.like_count || undefined,
+    publishedAt: shortVideo.published_at || undefined,
+    summary: shortVideo.summary || undefined,
+  };
+};
+
+// Store processed videos in our database
+export const storeProcessedVideo = async (videoData: {
+  youtubeId: string;
+  title: string;
+  description?: string;
+  thumbnailUrl?: string;
+  channel: string;
+  previewUrl?: string;
+  publishedAt?: string;
+  viewCount?: number;
+  likeCount?: number;
+  summary?: string;
+}): Promise<{ success: boolean; id?: string; error?: any }> => {
+  try {
+    const { data, error } = await supabase
+      .from('short_videos')
+      .upsert({
+        youtube_id: videoData.youtubeId,
+        title: videoData.title,
+        description: videoData.description || null,
+        thumbnail_url: videoData.thumbnailUrl || null,
+        channel: videoData.channel,
+        preview_url: videoData.previewUrl || null,
+        published_at: videoData.publishedAt || null,
+        view_count: videoData.viewCount || null,
+        like_count: videoData.likeCount || null,
+        summary: videoData.summary || null,
+      }, {
+        onConflict: 'youtube_id'
+      })
+      .select('id')
+      .single();
+    
+    if (error) throw error;
+    
+    return { success: true, id: data?.id };
+  } catch (error) {
+    console.error('Error storing processed video:', error);
+    return { success: false, error };
+  }
 };
