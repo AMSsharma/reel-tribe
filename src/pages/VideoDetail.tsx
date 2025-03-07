@@ -65,6 +65,7 @@ const VideoDetail = () => {
             src={video.videoUrl} 
             poster={video.thumbnailUrl}
             isActive={true}
+            youtubeId={video.youtubeId}
           />
         </div>
         

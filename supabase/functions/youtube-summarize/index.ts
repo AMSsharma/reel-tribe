@@ -44,7 +44,9 @@ serve(async (req) => {
     
     // Generate Python-like processing description
     const processingDescription = generateProcessingDescription(videoId, videoDetails);
-    console.log(processingDescription);
+    
+    // Simulate getting videos for feed
+    const trendingVideos = await getTrendingYouTubeShorts();
     
     // Return the response
     return new Response(
@@ -53,7 +55,8 @@ serve(async (req) => {
         videoId,
         videoDetails,
         summary,
-        processingDescription
+        processingDescription,
+        trendingVideos
       }),
       { 
         headers: { 
@@ -150,6 +153,47 @@ Summary:`;
   }
   
   return data.choices[0].message.content.trim();
+}
+
+// Function to get trending YouTube Shorts
+async function getTrendingYouTubeShorts() {
+  try {
+    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=30&q=shorts&type=video&videoDuration=short&order=viewCount&key=${youtubeApiKey}`;
+    
+    const response = await fetch(url);
+    const data = await response.json();
+    
+    if (!data.items || data.items.length === 0) {
+      throw new Error('No trending shorts found');
+    }
+    
+    const videoIds = data.items.map((item: any) => item.id.videoId).join(',');
+    
+    // Get more details for these videos
+    const detailsUrl = `https://www.googleapis.com/youtube/v3/videos?id=${videoIds}&part=snippet,contentDetails,statistics&key=${youtubeApiKey}`;
+    const detailsResponse = await fetch(detailsUrl);
+    const detailsData = await detailsResponse.json();
+    
+    if (!detailsData.items) {
+      throw new Error('Could not fetch video details');
+    }
+    
+    // Format the response in our expected structure
+    return detailsData.items.map((video: any) => ({
+      id: video.id,
+      title: video.snippet.title,
+      description: video.snippet.description,
+      thumbnail_url: video.snippet.thumbnails.high.url,
+      channel: video.snippet.channelTitle,
+      published_at: video.snippet.publishedAt,
+      view_count: parseInt(video.statistics.viewCount),
+      like_count: parseInt(video.statistics.likeCount || '0'),
+      youtube_id: video.id
+    }));
+  } catch (error) {
+    console.error('Error fetching trending shorts:', error);
+    return [];
+  }
 }
 
 // Function to generate a Python-like processing description

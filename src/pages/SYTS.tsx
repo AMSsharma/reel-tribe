@@ -7,6 +7,7 @@ import { Link } from 'react-router-dom';
 import { Info } from 'lucide-react';
 import { getAllVideos } from '@/services/videoService';
 import { VideoData } from '@/types/video';
+import { toast } from 'sonner';
 
 const SYTS = () => {
   const [videos, setVideos] = useState<VideoData[]>([]);
@@ -20,6 +21,7 @@ const SYTS = () => {
         setVideos(fetchedVideos);
       } catch (error) {
         console.error('Error fetching videos:', error);
+        toast.error("Failed to load videos. Please try again later.");
       } finally {
         setLoading(false);
       }
@@ -55,11 +57,20 @@ const SYTS = () => {
                   className="group rounded-lg overflow-hidden bg-white/70 dark:bg-gray-800/50 backdrop-blur-md hover:shadow-md transition-all"
                 >
                   <div className="aspect-video relative overflow-hidden">
-                    <img 
-                      src={video.thumbnailUrl}
-                      alt={video.title}
-                      className="w-full h-full object-cover transition-transform group-hover:scale-105" 
-                    />
+                    {video.youtubeId ? (
+                      <iframe
+                        src={`https://www.youtube.com/embed/${video.youtubeId}`}
+                        className="w-full h-full"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                      />
+                    ) : (
+                      <img 
+                        src={video.thumbnailUrl}
+                        alt={video.title}
+                        className="w-full h-full object-cover transition-transform group-hover:scale-105" 
+                      />
+                    )}
                   </div>
                   <div className="p-3">
                     <h3 className="font-medium line-clamp-2 group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:from-purple-600 group-hover:via-pink-600 group-hover:to-red-600 transition-colors">

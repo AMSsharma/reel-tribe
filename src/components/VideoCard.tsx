@@ -1,22 +1,10 @@
+
 import React from 'react';
 import { Link } from 'react-router-dom';
 import VideoPlayer from './VideoPlayer';
 import EngagementButtons from './EngagementButtons';
 import { useIntersectionObserver } from '@/hooks/useIntersectionObserver';
-
-export interface VideoData {
-  id: string;
-  title: string;
-  creator: {
-    id: string;
-    name: string;
-    avatar: string;
-  };
-  videoUrl: string;
-  thumbnailUrl: string;
-  youtubeUrl: string;
-  description?: string;
-}
+import { VideoData } from '@/types/video';
 
 interface VideoCardProps {
   video: VideoData;
@@ -58,6 +46,7 @@ const VideoCard: React.FC<VideoCardProps> = ({ video, isActive, onActive }) => {
           src={video.videoUrl} 
           poster={video.thumbnailUrl}
           isActive={isActive}
+          youtubeId={video.youtubeId}
         />
       </div>
 

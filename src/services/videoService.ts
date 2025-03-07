@@ -2,61 +2,43 @@
 import { VideoData, ShortVideo } from '@/types/video';
 import { supabase } from '@/integrations/supabase/client';
 
-// Mock data (in a real app, this would come from an API)
-const MOCK_VIDEOS: VideoData[] = [
-  {
-    id: '1',
-    title: 'How to Master Swift in 10 Minutes',
-    creator: {
-      id: 'creator1',
-      name: 'TechMaster',
-      avatar: 'https://i.pravatar.cc/150?img=1',
-    },
-    videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-woman-typing-on-a-laptop-in-a-cafe-38958-large.mp4',
-    thumbnailUrl: 'https://i.imgur.com/A8eQsll.jpg',
-    youtubeUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-    description: 'Learn the basics of Swift programming in this quick tutorial. We cover the fundamentals like variables, functions, and control flow. Perfect for beginners who want to get started with iOS development.',
-  },
-  {
-    id: '2',
-    title: 'Building a Modern Website with Tailwind CSS',
-    creator: {
-      id: 'creator2',
-      name: 'CodeArtist',
-      avatar: 'https://i.pravatar.cc/150?img=2',
-    },
-    videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-young-woman-working-on-her-laptop-at-home-4806-large.mp4',
-    thumbnailUrl: 'https://i.imgur.com/JjkZMYR.jpg',
-    youtubeUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-    description: 'Discover how to use Tailwind CSS to build beautiful, responsive websites quickly. This tutorial covers setup, basic utilities, responsive design, and advanced customization.',
-  },
-  {
-    id: '3',
-    title: 'The Future of AI in 2023',
-    creator: {
-      id: 'creator3',
-      name: 'FutureTech',
-      avatar: 'https://i.pravatar.cc/150?img=3',
-    },
-    videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-man-in-a-suit-working-on-a-financial-analysis-29910-large.mp4',
-    thumbnailUrl: 'https://i.imgur.com/HVaYXQF.jpg',
-    youtubeUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-    description: 'An overview of what to expect from artificial intelligence advancements in 2023. We discuss breakthroughs in natural language processing, computer vision, and generative AI.',
-  },
-  {
-    id: '4',
-    title: 'Mastering React Hooks',
-    creator: {
-      id: 'creator4',
-      name: 'ReactMaster',
-      avatar: 'https://i.pravatar.cc/150?img=4',
-    },
-    videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-woman-working-on-her-laptop-4847-large.mp4',
-    thumbnailUrl: 'https://i.imgur.com/JmA9vXs.jpg',
-    youtubeUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-    description: 'Learn how to effectively use React Hooks in your projects. This tutorial covers useState, useEffect, useContext, useRef, and custom hooks.',
-  },
-];
+// Fetch trending videos from YouTube (via our Edge Function)
+const fetchTrendingVideos = async (): Promise<ShortVideo[]> => {
+  try {
+    const { data, error } = await supabase.functions.invoke('youtube-summarize', {
+      body: { youtubeUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' } // Any valid URL to trigger the function
+    });
+    
+    if (error) throw error;
+    
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to fetch trending videos');
+    }
+    
+    // Store the trending videos in our database
+    const trendingVideos = data.trendingVideos || [];
+    
+    for (const video of trendingVideos) {
+      await storeProcessedVideo({
+        youtubeId: video.id,
+        title: video.title,
+        description: video.description,
+        thumbnailUrl: video.thumbnail_url,
+        channel: video.channel,
+        publishedAt: video.published_at,
+        viewCount: video.view_count,
+        likeCount: video.like_count,
+        summary: null // We don't have summaries for all trending videos
+      });
+    }
+    
+    // Return the trending videos
+    return trendingVideos;
+  } catch (error) {
+    console.error('Error fetching trending videos:', error);
+    return [];
+  }
+};
 
 export const getVideoById = async (id: string): Promise<VideoData | null> => {
   try {
@@ -71,14 +53,12 @@ export const getVideoById = async (id: string): Promise<VideoData | null> => {
       return convertShortVideoToVideoData(shortVideo);
     }
     
+    console.error('Video not found in database, using mock data');
     // Fall back to mock data if not found in database
-    const video = MOCK_VIDEOS.find(v => v.id === id) || null;
-    return video;
+    return null;
   } catch (error) {
     console.error('Error fetching video:', error);
-    // Fall back to mock data
-    const video = MOCK_VIDEOS.find(v => v.id === id) || null;
-    return video;
+    return null;
   }
 };
 
@@ -95,29 +75,20 @@ export const getRelatedVideos = async (currentVideoId: string): Promise<VideoDat
         .filter(video => video.id !== currentVideoId)
         .map(convertShortVideoToVideoData);
       
-      // If we have less than 3 videos, add some mock data
-      if (videos.length < 3) {
-        const mockVideos = MOCK_VIDEOS.filter(v => v.id !== currentVideoId);
-        return [...videos, ...mockVideos].slice(0, 5);
-      }
-      
       return videos;
     }
     
-    // Fall back to mock data
-    const videos = MOCK_VIDEOS.filter(v => v.id !== currentVideoId);
-    return videos;
+    console.error('No related videos found in database');
+    return [];
   } catch (error) {
     console.error('Error fetching related videos:', error);
-    // Fall back to mock data
-    const videos = MOCK_VIDEOS.filter(v => v.id !== currentVideoId);
-    return videos;
+    return [];
   }
 };
 
 export const getAllVideos = async (): Promise<VideoData[]> => {
   try {
-    // Get short videos from our database
+    // Try to get videos from database
     const { data: shortVideos, error } = await supabase
       .from('short_videos')
       .select('*')
@@ -125,22 +96,30 @@ export const getAllVideos = async (): Promise<VideoData[]> => {
       .limit(20);
     
     if (shortVideos && shortVideos.length > 0 && !error) {
-      const videos = shortVideos.map(convertShortVideoToVideoData);
-      
-      // If we have less than 5 videos, add some mock data
-      if (videos.length < 5) {
-        return [...videos, ...MOCK_VIDEOS].slice(0, MOCK_VIDEOS.length + videos.length);
-      }
-      
-      return videos;
+      return shortVideos.map(convertShortVideoToVideoData);
     }
     
-    // Fall back to mock data
-    return MOCK_VIDEOS;
+    // If no videos in database, fetch trending videos
+    const trendingVideos = await fetchTrendingVideos();
+    
+    if (trendingVideos && trendingVideos.length > 0) {
+      // Get the stored videos after fetching trends
+      const { data: refreshedVideos } = await supabase
+        .from('short_videos')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(20);
+        
+      if (refreshedVideos && refreshedVideos.length > 0) {
+        return refreshedVideos.map(convertShortVideoToVideoData);
+      }
+    }
+    
+    console.error('No videos found in database and failed to fetch trending videos');
+    return [];
   } catch (error) {
     console.error('Error fetching all videos:', error);
-    // Fall back to mock data
-    return MOCK_VIDEOS;
+    return [];
   }
 };
 

@@ -11,6 +11,7 @@ interface VideoPlayerProps {
   autoPlay?: boolean;
   onClick?: () => void;
   className?: string;
+  youtubeId?: string;
 }
 
 const VideoPlayer: React.FC<VideoPlayerProps> = ({
@@ -22,6 +23,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   autoPlay = true,
   onClick,
   className = '',
+  youtubeId,
 }) => {
   const [isLoaded, setIsLoaded] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -30,12 +32,12 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   
   // Handle visibility changes
   useEffect(() => {
-    if (isActive && isVisible) {
+    if (isActive && isVisible && !youtubeId) {
       playVideo();
-    } else {
+    } else if (!youtubeId) {
       pauseVideo();
     }
-  }, [isActive, isVisible]);
+  }, [isActive, isVisible, youtubeId]);
   
   // Play/Pause functions
   const playVideo = () => {
@@ -57,7 +59,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const handleVideoClick = () => {
     if (onClick) {
       onClick();
-    } else {
+    } else if (!youtubeId) {
       isPlaying ? pauseVideo() : playVideo();
     }
   };
@@ -66,6 +68,23 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const handleVideoLoad = () => {
     setIsLoaded(true);
   };
+
+  // Render YouTube embed if youtubeId is provided
+  if (youtubeId) {
+    return (
+      <div 
+        ref={containerRef}
+        className={`video-container relative w-full h-full overflow-hidden ${className}`}
+      >
+        <iframe
+          src={`https://www.youtube.com/embed/${youtubeId}?autoplay=${isActive && isVisible ? 1 : 0}&mute=1&loop=1&playlist=${youtubeId}`}
+          className="w-full h-full"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+        />
+      </div>
+    );
+  }
 
   return (
     <div 
@@ -95,7 +114,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         onLoadedData={handleVideoLoad}
       />
       
-      {!isPlaying && isLoaded && (
+      {!isPlaying && isLoaded && !youtubeId && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/30">
           <div className="w-16 h-16 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center">
             <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">

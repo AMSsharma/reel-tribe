@@ -4,6 +4,7 @@ import VideoCard from '@/components/VideoCard';
 import BottomNav from '@/components/BottomNav';
 import { VideoData } from '@/types/video';
 import { getAllVideos } from '@/services/videoService';
+import { toast } from 'sonner';
 
 const Index = () => {
   const [videos, setVideos] = useState<VideoData[]>([]);
@@ -17,9 +18,13 @@ const Index = () => {
       setIsLoading(true);
       try {
         const fetchedVideos = await getAllVideos();
+        if (fetchedVideos.length === 0) {
+          toast.error("No videos found. Please try again later.");
+        }
         setVideos(fetchedVideos);
       } catch (error) {
         console.error('Error fetching videos:', error);
+        toast.error("Failed to load videos. Please try again later.");
       } finally {
         setIsLoading(false);
       }
@@ -28,52 +33,11 @@ const Index = () => {
     fetchVideos();
   }, []);
   
-  // Simulate infinite scrolling by appending more videos when reaching the end
-  const loadMoreVideos = () => {
-    if (isLoading) return;
-    
-    setIsLoading(true);
-    
-    // In a real app, this would be an API call to fetch more videos with pagination
-    setTimeout(async () => {
-      try {
-        // Try to get more real videos first
-        const existingIds = videos.map(v => v.id);
-        const moreVideos = await getAllVideos();
-        const newVideos = moreVideos.filter(v => !existingIds.includes(v.id));
-        
-        if (newVideos.length > 0) {
-          setVideos(prevVideos => [...prevVideos, ...newVideos]);
-        } else {
-          // Fall back to shuffled versions of the same videos (for demo purposes)
-          const shuffledVideos = [...videos]
-            .sort(() => Math.random() - 0.5)
-            .slice(0, 5)
-            .map(video => ({ 
-              ...video, 
-              id: `${video.id}-${Math.random().toString(36).substring(7)}` 
-            }));
-            
-          setVideos(prevVideos => [...prevVideos, ...shuffledVideos]);
-        }
-      } catch (error) {
-        console.error('Error loading more videos:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    }, 1500);
-  };
-  
   // Handle scroll events to implement infinite scrolling
   const handleScroll = () => {
     if (!scrollContainerRef.current) return;
     
     const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
-    
-    // If we're near the bottom, load more videos
-    if (scrollHeight - scrollTop - clientHeight < 500) {
-      loadMoreVideos();
-    }
     
     // Update active video based on scroll position
     const videoIndex = Math.floor(scrollTop / clientHeight);
@@ -110,6 +74,14 @@ const Index = () => {
         {videos.length === 0 && isLoading ? (
           <div className="flex justify-center items-center h-[70vh]">
             <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        ) : videos.length === 0 ? (
+          <div className="flex flex-col justify-center items-center h-[70vh] p-4 text-center">
+            <h2 className="text-xl font-semibold mb-2">No Videos Available</h2>
+            <p className="text-muted-foreground">
+              We couldn't find any videos to display at the moment.
+              Please check back later or try the SYTS tab to see shared videos.
+            </p>
           </div>
         ) : (
           <div 
