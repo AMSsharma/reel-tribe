@@ -5,10 +5,16 @@ import { toast as sonnerToast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { Loader2, Share } from "lucide-react";
+import { Loader2, Share, Clock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import VideoPlayer from './VideoPlayer';
 import { storeProcessedVideo } from '@/services/videoService';
+
+interface Timestamp {
+  time: string;
+  description: string;
+  reason: string;
+}
 
 interface SummaryResult {
   videoId: string;
@@ -24,6 +30,7 @@ interface SummaryResult {
     likeCount: string;
   };
   summary: string;
+  timestamps: Timestamp[];
 }
 
 const YouTubeSummarizer: React.FC = () => {
@@ -158,6 +165,37 @@ const YouTubeSummarizer: React.FC = () => {
               <p className="text-gray-700 dark:text-gray-300">{result.summary}</p>
             </div>
             
+            {result.timestamps && result.timestamps.length > 0 && (
+              <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+                <h4 className="font-medium mb-2 flex items-center">
+                  <Clock className="mr-2 h-4 w-4" />
+                  Key Moments:
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {result.timestamps.map((timestamp, index) => (
+                    <div 
+                      key={index} 
+                      className="bg-gray-100 dark:bg-gray-700/50 p-3 rounded-lg"
+                    >
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="font-medium">{timestamp.time}</span>
+                        <a 
+                          href={`https://www.youtube.com/watch?v=${result.videoId}&t=${convertTimestampToSeconds(timestamp.time)}`} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-xs text-blue-500 hover:underline"
+                        >
+                          Jump to moment
+                        </a>
+                      </div>
+                      <p className="text-sm">{timestamp.description}</p>
+                      <p className="text-xs text-gray-500 mt-1">{timestamp.reason}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
             <div className="flex justify-end">
               <Button 
                 onClick={shareToSYTS}
@@ -182,6 +220,12 @@ const YouTubeSummarizer: React.FC = () => {
       )}
     </div>
   );
+};
+
+// Helper to convert a timestamp like "01:45" to seconds
+const convertTimestampToSeconds = (timestamp: string): number => {
+  const parts = timestamp.split(':');
+  return parseInt(parts[0]) * 60 + parseInt(parts[1]);
 };
 
 export default YouTubeSummarizer;

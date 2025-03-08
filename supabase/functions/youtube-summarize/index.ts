@@ -2,7 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 
-const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
+const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
 const youtubeApiKey = Deno.env.get('YOUTUBE_API_KEY');
 
 const corsHeaders = {
@@ -19,11 +19,11 @@ serve(async (req) => {
   try {
     console.log("Starting YouTube summarize function");
     console.log("API Keys available:", {
-      openAI: openAIApiKey ? "Set" : "Not set",
+      gemini: geminiApiKey ? "Set" : "Not set",
       youtube: youtubeApiKey ? "Set" : "Not set"
     });
     
-    if (!openAIApiKey || !youtubeApiKey) {
+    if (!geminiApiKey || !youtubeApiKey) {
       throw new Error('API keys are not properly configured');
     }
 
@@ -43,9 +43,14 @@ serve(async (req) => {
     const videoDetails = await fetchYouTubeVideoDetails(videoId);
     console.log("Video details fetched successfully");
     
-    // Generate summary using OpenAI
-    console.log("Generating summary with OpenAI...");
-    const summary = await generateSummaryWithOpenAI(videoDetails);
+    // Generate timestamps using Gemini
+    console.log("Generating timestamps with Gemini API...");
+    const timestamps = await generateTimestampsWithGemini(videoDetails);
+    console.log("Timestamps generated successfully");
+    
+    // Generate summary using Gemini
+    console.log("Generating summary with Gemini API...");
+    const summary = await generateSummaryWithGemini(videoDetails);
     console.log("Summary generated successfully");
     
     // Log the processing steps we'd do with Python/FFmpeg
@@ -54,13 +59,13 @@ serve(async (req) => {
     console.log(`[VideoProcessor] 1. Download the video from YouTube using pytube`);
     console.log(`[VideoProcessor] 2. Extract key frames using FFmpeg scene detection`);
     console.log(`[VideoProcessor] 3. Analyze audio track for important moments`);
-    console.log(`[VideoProcessor] 4. Use OpenAI to identify key parts of the video`);
+    console.log(`[VideoProcessor] 4. Use Gemini to identify key parts at timestamps: ${JSON.stringify(timestamps)}`);
     console.log(`[VideoProcessor] 5. Create a shorter preview using FFmpeg cuts and transitions`);
     console.log(`[VideoProcessor] 6. Generate preview with voiceover or captions`);
     console.log(`[VideoProcessor] 7. Upload final preview to storage bucket`);
     
-    // Generate Python-like processing description
-    const processingDescription = generateProcessingDescription(videoId, videoDetails);
+    // Generate Python-like processing description with timestamps
+    const processingDescription = generateProcessingDescription(videoId, videoDetails, timestamps);
     
     // Simulate getting videos for feed
     console.log("Fetching trending YouTube shorts...");
@@ -75,6 +80,7 @@ serve(async (req) => {
         videoId,
         videoDetails,
         summary,
+        timestamps,
         processingDescription,
         trendingVideos
       }),
@@ -153,59 +159,6 @@ async function fetchYouTubeVideoDetails(videoId: string) {
   }
 }
 
-// Function to generate summary with OpenAI
-async function generateSummaryWithOpenAI(videoDetails: any) {
-  if (!openAIApiKey) {
-    throw new Error('OpenAI API key is not configured');
-  }
-
-  const prompt = `
-Create a short, engaging summary of this YouTube video. Make it informative and concise in 2-3 sentences.
-
-Title: ${videoDetails.title}
-Description: ${videoDetails.description.slice(0, 500)}...
-Channel: ${videoDetails.channel}
-Duration: ${videoDetails.duration}
-Views: ${videoDetails.viewCount}
-
-Summary:`;
-
-  try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openAIApiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: 'You are a helpful assistant that creates concise and engaging video summaries.' },
-          { role: 'user', content: prompt }
-        ],
-        max_tokens: 150
-      })
-    });
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('OpenAI API error:', errorText);
-      throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
-    }
-    
-    const data = await response.json();
-    
-    if (!data.choices || data.choices.length === 0) {
-      throw new Error('Failed to generate summary');
-    }
-    
-    return data.choices[0].message.content.trim();
-  } catch (error) {
-    console.error('Error generating summary with OpenAI:', error);
-    throw new Error(`Failed to generate summary: ${error.message}`);
-  }
-}
-
 // Function to get trending YouTube Shorts
 async function getTrendingYouTubeShorts() {
   if (!youtubeApiKey) {
@@ -266,22 +219,171 @@ async function getTrendingYouTubeShorts() {
   }
 }
 
+// Function to generate summary with Gemini
+async function generateSummaryWithGemini(videoDetails: any) {
+  if (!geminiApiKey) {
+    throw new Error('Gemini API key is not configured');
+  }
+
+  const prompt = `
+Create a short, engaging summary of this YouTube video. Make it informative and concise in 2-3 sentences.
+
+Title: ${videoDetails.title}
+Description: ${videoDetails.description.slice(0, 500)}...
+Channel: ${videoDetails.channel}
+Duration: ${videoDetails.duration}
+Views: ${videoDetails.viewCount}
+
+Summary:`;
+
+  try {
+    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': geminiApiKey
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              { text: prompt }
+            ]
+          }
+        ],
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 150,
+        }
+      })
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Gemini API error:', errorText);
+      throw new Error(`Gemini API error: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    
+    if (!data.candidates || data.candidates.length === 0) {
+      throw new Error('Failed to generate summary');
+    }
+    
+    return data.candidates[0].content.parts[0].text.trim();
+  } catch (error) {
+    console.error('Error generating summary with Gemini:', error);
+    throw new Error(`Failed to generate summary: ${error.message}`);
+  }
+}
+
+// Function to generate timestamps with Gemini
+async function generateTimestampsWithGemini(videoDetails: any) {
+  if (!geminiApiKey) {
+    throw new Error('Gemini API key is not configured');
+  }
+
+  const prompt = `
+Analyze this YouTube video information and predict 5 key timestamp moments that would be good for creating a short preview.
+For each timestamp, provide: a time in the format MM:SS, a short description of what happens at that moment, and why it's interesting.
+Return the result as a JSON array of objects with "time", "description", and "reason" fields.
+
+Title: ${videoDetails.title}
+Description: ${videoDetails.description.slice(0, 500)}...
+Channel: ${videoDetails.channel}
+Duration: ${videoDetails.duration}
+Views: ${videoDetails.viewCount}
+
+Example of expected response format:
+[
+  {"time": "00:45", "description": "Introduction of the main concept", "reason": "Sets up the video context"},
+  {"time": "02:13", "description": "Demonstration of the key technique", "reason": "Shows the most valuable information"},
+  ...
+]
+`;
+
+  try {
+    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': geminiApiKey
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              { text: prompt }
+            ]
+          }
+        ],
+        generationConfig: {
+          temperature: 0.2,
+          maxOutputTokens: 1000,
+        }
+      })
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Gemini API error:', errorText);
+      throw new Error(`Gemini API error: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    
+    if (!data.candidates || data.candidates.length === 0) {
+      throw new Error('Failed to generate timestamps');
+    }
+    
+    const text = data.candidates[0].content.parts[0].text.trim();
+    
+    // Extract JSON array from text response
+    try {
+      // Find anything that looks like a JSON array in the response
+      const jsonMatch = text.match(/\[\s*\{.*\}\s*\]/s);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0]);
+      } else {
+        console.error('Could not extract JSON from Gemini response:', text);
+        return []; // Return empty array as fallback
+      }
+    } catch (parseError) {
+      console.error('Error parsing timestamps JSON:', parseError, 'Text was:', text);
+      return []; // Return empty array as fallback
+    }
+  } catch (error) {
+    console.error('Error generating timestamps with Gemini:', error);
+    return []; // Return empty array instead of throwing to prevent the entire function from failing
+  }
+}
+
 // Function to generate a Python-like processing description
-function generateProcessingDescription(videoId: string, videoDetails: any) {
+function generateProcessingDescription(videoId: string, videoDetails: any, timestamps: any[]) {
+  const timestampsCode = timestamps && timestamps.length > 0 
+    ? `key_moments = ${JSON.stringify(timestamps, null, 4)}`
+    : `key_moments = [
+    {"time": "00:30", "description": "Introduction", "reason": "Establishes context"},
+    {"time": "01:45", "description": "Main point discussion", "reason": "Core content"},
+    {"time": "03:20", "description": "Demonstration", "reason": "Visual explanation"},
+    {"time": "04:10", "description": "Results shown", "reason": "Proves the concept"},
+    {"time": "05:30", "description": "Conclusion", "reason": "Summarizes findings"}
+]`;
+
   return `
-# Python-like Pseudocode for Video Processing
+# Python-like Pseudocode for Video Processing with FFmpeg and AI
 
 import pytube
 import ffmpeg
 import numpy as np
 import whisper
-import openai
+from google.generativeai import GenerativeModel
 from moviepy.editor import *
 from sklearn.cluster import KMeans
 
 def process_youtube_video(url, video_id="${videoId}"):
     """
-    Process a YouTube video to create a trailer-like preview
+    Process a YouTube video to create a trailer-like preview using FFmpeg and AI
     """
     print(f"Processing video: {url}")
     
@@ -298,53 +400,43 @@ def process_youtube_video(url, video_id="${videoId}"):
     model = whisper.load_model("base")
     transcription = model.transcribe(audio_path)
     
-    # Step 4: Find key moments using GPT
-    response = openai.ChatCompletion.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": "You are an assistant that identifies the most engaging moments from video transcripts."},
-            {"role": "user", "content": f"Find the 3-5 most engaging moments from this transcript: {transcription['text']}"}
-        ]
-    )
-    key_moments = parse_key_moments(response.choices[0].message['content'])
+    # Step 4: Get key moments identified by Gemini AI
+    ${timestampsCode}
     
-    # Step 5: Extract scenes and detect transitions
-    scene_changes = detect_scenes(video_path)
+    # Step 5: Extract clips at the timestamps
+    clips = []
+    for moment in key_moments:
+        # Convert timestamp to seconds
+        time_parts = moment["time"].split(":")
+        seconds = int(time_parts[0]) * 60 + int(time_parts[1])
+        
+        # Extract 5-second clip around the timestamp
+        start_time = max(0, seconds - 2)
+        clip = VideoFileClip(video_path).subclip(start_time, start_time + 5)
+        
+        # Add text overlay with description
+        txt_clip = TextClip(moment["description"], fontsize=24, color='white')
+        txt_clip = txt_clip.set_position('bottom').set_duration(clip.duration)
+        clip = CompositeVideoClip([clip, txt_clip])
+        
+        clips.append(clip)
     
-    # Step 6: Create the preview
-    create_preview(video_path, audio_path, key_moments, scene_changes, f"./output/{video_id}_preview.mp4")
+    # Step 6: Concatenate clips with transitions
+    final_clip = concatenate_videoclips(clips, method="compose", transition=crossfadein(0.5))
     
-    # Step 7: Generate caption and voiceover
-    create_voiceover(key_moments, f"./output/{video_id}_voiceover.mp3")
+    # Step 7: Generate voiceover using text-to-speech
+    voiceover_text = f"Check out this video about {videoDetails.title}. Here are the highlights."
+    tts_model = GenerativeModel('gemini-pro')
+    tts_response = tts_model.generate_content(voiceover_text)
     
-    # Step 8: Combine preview with voiceover
-    final_preview = combine_video_audio(
-        f"./output/{video_id}_preview.mp4",
-        f"./output/{video_id}_voiceover.mp3",
-        f"./output/{video_id}_final.mp4"
-    )
+    # Step 8: Add voiceover to final video
+    final_clip = final_clip.set_audio(AudioFileClip("./temp/voiceover.mp3"))
     
-    return final_preview
-
-# Helper functions
-def detect_scenes(video_path):
-    """Use FFmpeg to detect scene changes"""
-    # Implementation details...
-    return [...]
-
-def create_preview(video_path, audio_path, key_moments, scene_changes, output_path):
-    """Create the preview video from key moments"""
-    # Implementation details...
-    pass
-
-def create_voiceover(key_moments, output_path):
-    """Generate a voiceover for the preview"""
-    # Implementation details...
-    pass
-
-def combine_video_audio(video_path, audio_path, output_path):
-    """Combine video and audio into final preview"""
-    # Implementation details...
+    # Step 9: Write final video to file
+    output_path = f"./output/{video_id}_preview.mp4"
+    final_clip.write_videofile(output_path, codec='libx264', audio_codec='aac')
+    
+    print(f"Preview created successfully: {output_path}")
     return output_path
 
 # Execute the processing
