@@ -5,7 +5,7 @@ import { toast as sonnerToast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { Loader2, Share, Clock } from "lucide-react";
+import { Loader2, Share, Clock, Code, Video } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import VideoPlayer from './VideoPlayer';
 import { storeProcessedVideo } from '@/services/videoService';
@@ -31,6 +31,7 @@ interface SummaryResult {
   };
   summary: string;
   timestamps: Timestamp[];
+  processingDescription?: string;
 }
 
 const YouTubeSummarizer: React.FC = () => {
@@ -38,6 +39,7 @@ const YouTubeSummarizer: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<SummaryResult | null>(null);
   const [savingToSYTS, setSavingToSYTS] = useState(false);
+  const [showCode, setShowCode] = useState(false);
   const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -195,6 +197,31 @@ const YouTubeSummarizer: React.FC = () => {
                 </div>
               </div>
             )}
+            
+            <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex items-center gap-2 mb-4"
+                onClick={() => setShowCode(!showCode)}
+              >
+                <Code size={16} />
+                {showCode ? 'Hide Processing Code' : 'Show Processing Code'}
+              </Button>
+              
+              {showCode && result.processingDescription && (
+                <div className="bg-black/90 text-green-400 p-4 rounded-md font-mono text-xs overflow-x-auto">
+                  <pre>{result.processingDescription}</pre>
+                </div>
+              )}
+              
+              <div className="flex items-center gap-2 mt-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800/30 rounded-md">
+                <Video className="h-5 w-5 text-yellow-500" />
+                <p className="text-sm text-yellow-700 dark:text-yellow-400">
+                  Video processing is simulated. In a production environment, this would trigger a backend process to extract and compile the clips based on the timestamps.
+                </p>
+              </div>
+            </div>
             
             <div className="flex justify-end">
               <Button 

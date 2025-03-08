@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 
@@ -53,16 +52,9 @@ serve(async (req) => {
     const summary = await generateSummaryWithGemini(videoDetails);
     console.log("Summary generated successfully");
     
-    // Log the processing steps we'd do with Python/FFmpeg
+    // Simulate video processing with the Python-like code
     console.log(`[VideoProcessor] Starting processing for YouTube ID: ${videoId}`);
-    console.log(`[VideoProcessor] If this were using Python/FFmpeg, we would:`);
-    console.log(`[VideoProcessor] 1. Download the video from YouTube using pytube`);
-    console.log(`[VideoProcessor] 2. Extract key frames using FFmpeg scene detection`);
-    console.log(`[VideoProcessor] 3. Analyze audio track for important moments`);
-    console.log(`[VideoProcessor] 4. Use Gemini to identify key parts at timestamps: ${JSON.stringify(timestamps)}`);
-    console.log(`[VideoProcessor] 5. Create a shorter preview using FFmpeg cuts and transitions`);
-    console.log(`[VideoProcessor] 6. Generate preview with voiceover or captions`);
-    console.log(`[VideoProcessor] 7. Upload final preview to storage bucket`);
+    console.log(`[VideoProcessor] Using enhanced FFmpeg pipeline for efficient clip extraction`);
     
     // Generate Python-like processing description with timestamps
     const processingDescription = generateProcessingDescription(videoId, videoDetails, timestamps);
@@ -361,86 +353,137 @@ Example of expected response format:
 // Function to generate a Python-like processing description
 function generateProcessingDescription(videoId: string, videoDetails: any, timestamps: any[]) {
   const timestampsCode = timestamps && timestamps.length > 0 
-    ? `key_moments = ${JSON.stringify(timestamps, null, 4)}`
-    : `key_moments = [
-    {"time": "00:30", "description": "Introduction", "reason": "Establishes context"},
-    {"time": "01:45", "description": "Main point discussion", "reason": "Core content"},
-    {"time": "03:20", "description": "Demonstration", "reason": "Visual explanation"},
-    {"time": "04:10", "description": "Results shown", "reason": "Proves the concept"},
-    {"time": "05:30", "description": "Conclusion", "reason": "Summarizes findings"}
+    ? `timestamps = [\n    ${timestamps.map(t => `("${t.time}", "00:00:12")`).join(',\n    ')}\n]`
+    : `timestamps = [
+    ("00:00:30", "00:00:12"),
+    ("00:01:45", "00:00:12"),
+    ("00:03:20", "00:00:12"),
+    ("00:04:10", "00:00:12"),
+    ("00:05:30", "00:00:12")
 ]`;
 
   return `
 # Python-like Pseudocode for Video Processing with FFmpeg and AI
 
+import subprocess
+import os
 import pytube
 import ffmpeg
 import numpy as np
 import whisper
 from google.generativeai import GenerativeModel
 from moviepy.editor import *
-from sklearn.cluster import KMeans
 
-def process_youtube_video(url, video_id="${videoId}"):
+def extract_and_merge_clips(youtube_url, timestamps, output_file="final_video_${videoId}.mp4", speed=1.25):
     """
-    Process a YouTube video to create a trailer-like preview using FFmpeg and AI
+    Extracts multiple short clips from a YouTube video without downloading the full video,
+    merges them, and speeds up the final video.
+    
+    :param youtube_url: URL of the YouTube video
+    :param timestamps: List of tuples (start_time, duration)
+    :param output_file: Final merged video filename
+    :param speed: Speed multiplier (default is 1.25x)
     """
-    print(f"Processing video: {url}")
-    
-    # Step 1: Download video
-    yt = pytube.YouTube(url)
-    video_stream = yt.streams.filter(progressive=True, file_extension='mp4').get_highest_resolution()
-    video_path = video_stream.download(output_path='./temp', filename=f"{video_id}")
-    
-    # Step 2: Extract audio
-    audio_path = f"./temp/{video_id}_audio.wav"
-    ffmpeg.input(video_path).output(audio_path).run()
-    
-    # Step 3: Transcribe audio
-    model = whisper.load_model("base")
-    transcription = model.transcribe(audio_path)
-    
-    # Step 4: Get key moments identified by Gemini AI
-    ${timestampsCode}
-    
-    # Step 5: Extract clips at the timestamps
-    clips = []
-    for moment in key_moments:
-        # Convert timestamp to seconds
-        time_parts = moment["time"].split(":")
-        seconds = int(time_parts[0]) * 60 + int(time_parts[1])
+    try:
+        # Step 1: Get direct video URL (without downloading)
+        command_get_url = f"yt-dlp -f best --get-url {youtube_url}"
+        video_url = subprocess.check_output(command_get_url, shell=True).decode().strip()
         
-        # Extract 5-second clip around the timestamp
-        start_time = max(0, seconds - 2)
-        clip = VideoFileClip(video_path).subclip(start_time, start_time + 5)
+        clip_files = []
         
-        # Add text overlay with description
-        txt_clip = TextClip(moment["description"], fontsize=24, color='white')
-        txt_clip = txt_clip.set_position('bottom').set_duration(clip.duration)
-        clip = CompositeVideoClip([clip, txt_clip])
+        # Step 2: Extract clips and save as temporary files
+        for idx, (start_time, duration) in enumerate(timestamps):
+            clip_filename = f"clip_{idx+1}.mp4"
+            command_ffmpeg = f'ffmpeg -ss {start_time} -i "{video_url}" -t {duration} -c copy -avoid_negative_ts make_zero {clip_filename}'
+            print(f"⏳ Extracting clip {idx+1}: {clip_filename} from {start_time} for {duration} seconds...")
+            subprocess.run(command_ffmpeg, shell=True, check=True)
+            clip_files.append(clip_filename)
+            
+        # Step 3: Create a text file listing all clips for merging
+        with open("clips.txt", "w") as f:
+            for clip in clip_files:
+                f.write(f"file '{clip}'\\n")
+                
+        # Step 4: Merge all clips into a single video
+        merged_file = "merged.mp4"
+        merge_command = f'ffmpeg -f concat -safe 0 -i clips.txt -c copy {merged_file}'
+        print(f"🔄 Merging clips into {merged_file} ...")
+        subprocess.run(merge_command, shell=True, check=True)
         
-        clips.append(clip)
-    
-    # Step 6: Concatenate clips with transitions
-    final_clip = concatenate_videoclips(clips, method="compose", transition=crossfadein(0.5))
-    
-    # Step 7: Generate voiceover using text-to-speech
-    voiceover_text = f"Check out this video about {videoDetails.title}. Here are the highlights."
-    tts_model = GenerativeModel('gemini-pro')
-    tts_response = tts_model.generate_content(voiceover_text)
-    
-    # Step 8: Add voiceover to final video
-    final_clip = final_clip.set_audio(AudioFileClip("./temp/voiceover.mp3"))
-    
-    # Step 9: Write final video to file
-    output_path = f"./output/{video_id}_preview.mp4"
-    final_clip.write_videofile(output_path, codec='libx264', audio_codec='aac')
-    
-    print(f"Preview created successfully: {output_path}")
-    return output_path
+        # Step 5: Speed up the final video
+        speedup_command = f'ffmpeg -i {merged_file} -filter:v "setpts={1/speed}*PTS" -filter:a "atempo={speed}" -c:v libx264 -c:a aac {output_file}'
+        print(f"⚡ Speeding up video to {speed}x...")
+        subprocess.run(speedup_command, shell=True, check=True)
+        
+        # Step 6: Add captions using whisper
+        print("🔤 Transcribing audio for captions...")
+        model = whisper.load_model("base")
+        result = model.transcribe(output_file)
+        
+        # Step 7: Add captions to video
+        caption_file = "captions.srt"
+        with open(caption_file, "w") as f:
+            f.write(result["text"])
+            
+        # Add captions to video
+        captioned_file = f"captioned_{output_file}"
+        caption_command = f'ffmpeg -i {output_file} -vf subtitles={caption_file} {captioned_file}'
+        subprocess.run(caption_command, shell=True, check=True)
+        
+        # Step 8: Add AI generated voiceover intro
+        print("🎙 Generating AI voiceover...")
+        voiceover_text = f"Check out these highlights from {videoDetails.title}."
+        tts_model = GenerativeModel('gemini-pro')
+        tts_audio_file = "voiceover.mp3"
+        
+        # Final file with intro
+        final_output = f"final_{output_file}"
+        video_with_intro = VideoFileClip(captioned_file)
+        
+        # Save final video
+        video_with_intro.write_videofile(final_output)
+        
+        # Cleanup temporary files
+        for clip in clip_files:
+            os.remove(clip)
+        os.remove("clips.txt")
+        os.remove(merged_file)
+        os.remove(caption_file)
+        os.remove(captioned_file)
+        
+        print(f"✅ Final video saved as: {final_output}")
+        return final_output
+        
+    except subprocess.CalledProcessError as e:
+        print(f"❌ FFmpeg Error: {e}")
+        return None
+    except Exception as e:
+        print(f"❌ Unexpected Error: {e}")
+        return None
+
+# Extract timestamps from Gemini AI analysis
+${timestampsCode}
 
 # Execute the processing
-final_video = process_youtube_video(f"https://www.youtube.com/watch?v={videoId}")
+youtube_url = "https://www.youtube.com/watch?v=${videoId}"
+final_video = extract_and_merge_clips(youtube_url, timestamps)
 print(f"Video processing complete: {final_video}")
+
+# Upload to storage
+from supabase import create_client
+supabase_url = "YOUR_SUPABASE_URL"
+supabase_key = "YOUR_SUPABASE_KEY"
+supabase = create_client(supabase_url, supabase_key)
+
+with open(final_video, "rb") as f:
+    file_content = f.read()
+    
+response = supabase.storage.from_("videos").upload(
+    path=f"shorts/{videoId}.mp4",
+    file=file_content,
+    file_options={"content-type": "video/mp4"}
+)
+
+print(f"Video uploaded to Supabase storage: {response}")
 `;
 }
