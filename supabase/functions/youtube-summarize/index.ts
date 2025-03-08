@@ -17,16 +17,36 @@ serve(async (req) => {
   }
 
   try {
+    console.log("Starting YouTube summarize function");
+    console.log("API Keys available:", {
+      openAI: openAIApiKey ? "Set" : "Not set",
+      youtube: youtubeApiKey ? "Set" : "Not set"
+    });
+    
+    if (!openAIApiKey || !youtubeApiKey) {
+      throw new Error('API keys are not properly configured');
+    }
+
     const { youtubeUrl } = await req.json();
+    console.log("Processing YouTube URL:", youtubeUrl);
     
     // Extract video ID from YouTube URL
     const videoId = extractVideoId(youtubeUrl);
     if (!videoId) {
       throw new Error('Invalid YouTube URL');
     }
+    
+    console.log("Extracted video ID:", videoId);
 
     // Fetch video details from YouTube API
+    console.log("Fetching video details from YouTube API...");
     const videoDetails = await fetchYouTubeVideoDetails(videoId);
+    console.log("Video details fetched successfully");
+    
+    // Generate summary using OpenAI
+    console.log("Generating summary with OpenAI...");
+    const summary = await generateSummaryWithOpenAI(videoDetails);
+    console.log("Summary generated successfully");
     
     // Log the processing steps we'd do with Python/FFmpeg
     console.log(`[VideoProcessor] Starting processing for YouTube ID: ${videoId}`);
@@ -39,16 +59,16 @@ serve(async (req) => {
     console.log(`[VideoProcessor] 6. Generate preview with voiceover or captions`);
     console.log(`[VideoProcessor] 7. Upload final preview to storage bucket`);
     
-    // Generate summary using OpenAI
-    const summary = await generateSummaryWithOpenAI(videoDetails);
-    
     // Generate Python-like processing description
     const processingDescription = generateProcessingDescription(videoId, videoDetails);
     
     // Simulate getting videos for feed
+    console.log("Fetching trending YouTube shorts...");
     const trendingVideos = await getTrendingYouTubeShorts();
+    console.log(`Found ${trendingVideos.length} trending shorts`);
     
     // Return the response
+    console.log("Returning successful response");
     return new Response(
       JSON.stringify({
         success: true,
@@ -71,7 +91,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message
+        error: error.message || 'Unknown error occurred'
       }),
       { 
         status: 400,
@@ -94,31 +114,51 @@ function extractVideoId(url: string): string | null {
 
 // Function to fetch video details from YouTube API
 async function fetchYouTubeVideoDetails(videoId: string) {
-  const url = `https://www.googleapis.com/youtube/v3/videos?id=${videoId}&part=snippet,contentDetails,statistics&key=${youtubeApiKey}`;
-  
-  const response = await fetch(url);
-  const data = await response.json();
-  
-  if (!data.items || data.items.length === 0) {
-    throw new Error('Video not found');
+  if (!youtubeApiKey) {
+    throw new Error('YouTube API key is not configured');
   }
   
-  const video = data.items[0];
-  return {
-    id: video.id,
-    title: video.snippet.title,
-    description: video.snippet.description,
-    thumbnailUrl: video.snippet.thumbnails.high.url,
-    channel: video.snippet.channelTitle,
-    publishedAt: video.snippet.publishedAt,
-    duration: video.contentDetails.duration,
-    viewCount: video.statistics.viewCount,
-    likeCount: video.statistics.likeCount
-  };
+  const url = `https://www.googleapis.com/youtube/v3/videos?id=${videoId}&part=snippet,contentDetails,statistics&key=${youtubeApiKey}`;
+  
+  try {
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('YouTube API error:', errorText);
+      throw new Error(`YouTube API error: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    
+    if (!data.items || data.items.length === 0) {
+      throw new Error('Video not found');
+    }
+    
+    const video = data.items[0];
+    return {
+      id: video.id,
+      title: video.snippet.title,
+      description: video.snippet.description,
+      thumbnailUrl: video.snippet.thumbnails.high.url,
+      channel: video.snippet.channelTitle,
+      publishedAt: video.snippet.publishedAt,
+      duration: video.contentDetails.duration,
+      viewCount: video.statistics.viewCount,
+      likeCount: video.statistics.likeCount || '0'
+    };
+  } catch (error) {
+    console.error('Error fetching YouTube video details:', error);
+    throw new Error(`Failed to fetch video details: ${error.message}`);
+  }
 }
 
 // Function to generate summary with OpenAI
 async function generateSummaryWithOpenAI(videoDetails: any) {
+  if (!openAIApiKey) {
+    throw new Error('OpenAI API key is not configured');
+  }
+
   const prompt = `
 Create a short, engaging summary of this YouTube video. Make it informative and concise in 2-3 sentences.
 
@@ -130,37 +170,59 @@ Views: ${videoDetails.viewCount}
 
 Summary:`;
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${openAIApiKey}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model: 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: 'You are a helpful assistant that creates concise and engaging video summaries.' },
-        { role: 'user', content: prompt }
-      ],
-      max_tokens: 150
-    })
-  });
-
-  const data = await response.json();
-  
-  if (!data.choices || data.choices.length === 0) {
-    throw new Error('Failed to generate summary');
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openAIApiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: 'You are a helpful assistant that creates concise and engaging video summaries.' },
+          { role: 'user', content: prompt }
+        ],
+        max_tokens: 150
+      })
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('OpenAI API error:', errorText);
+      throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    
+    if (!data.choices || data.choices.length === 0) {
+      throw new Error('Failed to generate summary');
+    }
+    
+    return data.choices[0].message.content.trim();
+  } catch (error) {
+    console.error('Error generating summary with OpenAI:', error);
+    throw new Error(`Failed to generate summary: ${error.message}`);
   }
-  
-  return data.choices[0].message.content.trim();
 }
 
 // Function to get trending YouTube Shorts
 async function getTrendingYouTubeShorts() {
+  if (!youtubeApiKey) {
+    throw new Error('YouTube API key is not configured');
+  }
+
   try {
     const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=30&q=shorts&type=video&videoDuration=short&order=viewCount&key=${youtubeApiKey}`;
     
     const response = await fetch(url);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('YouTube API error when fetching trending shorts:', errorText);
+      throw new Error(`YouTube API error: ${response.status} ${response.statusText}`);
+    }
+    
     const data = await response.json();
     
     if (!data.items || data.items.length === 0) {
@@ -172,6 +234,13 @@ async function getTrendingYouTubeShorts() {
     // Get more details for these videos
     const detailsUrl = `https://www.googleapis.com/youtube/v3/videos?id=${videoIds}&part=snippet,contentDetails,statistics&key=${youtubeApiKey}`;
     const detailsResponse = await fetch(detailsUrl);
+    
+    if (!detailsResponse.ok) {
+      const errorText = await detailsResponse.text();
+      console.error('YouTube API error when fetching video details:', errorText);
+      throw new Error(`YouTube API error: ${detailsResponse.status} ${detailsResponse.statusText}`);
+    }
+    
     const detailsData = await detailsResponse.json();
     
     if (!detailsData.items) {
@@ -186,12 +255,13 @@ async function getTrendingYouTubeShorts() {
       thumbnail_url: video.snippet.thumbnails.high.url,
       channel: video.snippet.channelTitle,
       published_at: video.snippet.publishedAt,
-      view_count: parseInt(video.statistics.viewCount),
+      view_count: parseInt(video.statistics.viewCount || '0'),
       like_count: parseInt(video.statistics.likeCount || '0'),
       youtube_id: video.id
     }));
   } catch (error) {
     console.error('Error fetching trending shorts:', error);
+    // Return empty array instead of throwing to prevent the entire function from failing
     return [];
   }
 }
