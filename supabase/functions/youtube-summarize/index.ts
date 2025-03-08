@@ -26,42 +26,53 @@ serve(async (req) => {
       throw new Error('API keys are not properly configured');
     }
 
-    const { youtubeUrl } = await req.json();
+    const { youtubeUrl, userEmail } = await req.json();
     console.log("Processing YouTube URL:", youtubeUrl);
+    console.log("User email for personalization:", userEmail || "Not provided");
     
-    // Extract video ID from YouTube URL
-    const videoId = extractVideoId(youtubeUrl);
-    if (!videoId) {
-      throw new Error('Invalid YouTube URL');
+    // Extract video ID from YouTube URL if provided
+    let videoId = null;
+    if (youtubeUrl) {
+      videoId = extractVideoId(youtubeUrl);
+      if (!videoId) {
+        throw new Error('Invalid YouTube URL');
+      }
+      console.log("Extracted video ID:", videoId);
     }
     
-    console.log("Extracted video ID:", videoId);
-
-    // Fetch video details from YouTube API
-    console.log("Fetching video details from YouTube API...");
-    const videoDetails = await fetchYouTubeVideoDetails(videoId);
-    console.log("Video details fetched successfully");
+    let videoDetails = null;
+    let summary = null;
+    let timestamps = null;
+    let processingDescription = null;
     
-    // Generate timestamps using Gemini
-    console.log("Generating timestamps with Gemini API...");
-    const timestamps = await generateTimestampsWithGemini(videoDetails);
-    console.log("Timestamps generated successfully");
+    // If we have a valid video ID, process that specific video
+    if (videoId) {
+      // Fetch video details from YouTube API
+      console.log("Fetching video details from YouTube API...");
+      videoDetails = await fetchYouTubeVideoDetails(videoId);
+      console.log("Video details fetched successfully");
+      
+      // Generate timestamps using Gemini
+      console.log("Generating timestamps with Gemini API...");
+      timestamps = await generateTimestampsWithGemini(videoDetails);
+      console.log("Timestamps generated successfully");
+      
+      // Generate summary using Gemini
+      console.log("Generating summary with Gemini API...");
+      summary = await generateSummaryWithGemini(videoDetails);
+      console.log("Summary generated successfully");
+      
+      // Simulate video processing with the Python-like code
+      console.log(`[VideoProcessor] Starting processing for YouTube ID: ${videoId}`);
+      console.log(`[VideoProcessor] Using enhanced FFmpeg pipeline for efficient clip extraction`);
+      
+      // Generate Python-like processing description with timestamps
+      processingDescription = generateProcessingDescription(videoId, videoDetails, timestamps);
+    }
     
-    // Generate summary using Gemini
-    console.log("Generating summary with Gemini API...");
-    const summary = await generateSummaryWithGemini(videoDetails);
-    console.log("Summary generated successfully");
-    
-    // Simulate video processing with the Python-like code
-    console.log(`[VideoProcessor] Starting processing for YouTube ID: ${videoId}`);
-    console.log(`[VideoProcessor] Using enhanced FFmpeg pipeline for efficient clip extraction`);
-    
-    // Generate Python-like processing description with timestamps
-    const processingDescription = generateProcessingDescription(videoId, videoDetails, timestamps);
-    
-    // Simulate getting videos for feed
+    // Fetch trending YouTube shorts based on user preferences
     console.log("Fetching trending YouTube shorts...");
-    const trendingVideos = await getTrendingYouTubeShorts();
+    const trendingVideos = await getTrendingYouTubeShorts(userEmail);
     console.log(`Found ${trendingVideos.length} trending shorts`);
     
     // Return the response
@@ -151,14 +162,33 @@ async function fetchYouTubeVideoDetails(videoId: string) {
   }
 }
 
-// Function to get trending YouTube Shorts
-async function getTrendingYouTubeShorts() {
+// Function to get trending YouTube Shorts based on user preferences
+async function getTrendingYouTubeShorts(userEmail?: string) {
   if (!youtubeApiKey) {
     throw new Error('YouTube API key is not configured');
   }
 
   try {
-    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=30&q=shorts&type=video&videoDuration=short&order=viewCount&key=${youtubeApiKey}`;
+    // Generate search query based on user email if available
+    let searchQuery = 'shorts';
+    
+    if (userEmail) {
+      console.log(`Personalizing recommendations for ${userEmail}`);
+      
+      // Extract domain from email to get potential interests
+      const domain = userEmail.split('@')[1];
+      
+      // Use Gemini to generate personalized interest categories
+      const interests = await generateUserInterests(userEmail);
+      
+      if (interests && interests.length > 0) {
+        // Use the first interest to personalize search
+        searchQuery = `shorts ${interests[0]}`;
+        console.log(`Using personalized search query: ${searchQuery}`);
+      }
+    }
+
+    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=30&q=${encodeURIComponent(searchQuery)}&type=video&videoDuration=short&order=viewCount&key=${youtubeApiKey}`;
     
     const response = await fetch(url);
     
@@ -208,6 +238,76 @@ async function getTrendingYouTubeShorts() {
     console.error('Error fetching trending shorts:', error);
     // Return empty array instead of throwing to prevent the entire function from failing
     return [];
+  }
+}
+
+// Function to generate user interests based on email using Gemini
+async function generateUserInterests(userEmail: string): Promise<string[]> {
+  if (!geminiApiKey) {
+    throw new Error('Gemini API key is not configured');
+  }
+
+  const prompt = `
+Given this user email: ${userEmail}
+Based on the email domain and username, suggest 5 YouTube video topics or categories this person might be interested in.
+Return the result as a JSON array of strings.
+Example of expected response format:
+["technology", "programming", "data science", "machine learning", "web development"]
+`;
+
+  try {
+    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': geminiApiKey
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              { text: prompt }
+            ]
+          }
+        ],
+        generationConfig: {
+          temperature: 0.2,
+          maxOutputTokens: 200,
+        }
+      })
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Gemini API error:', errorText);
+      throw new Error(`Gemini API error: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    
+    if (!data.candidates || data.candidates.length === 0) {
+      throw new Error('Failed to generate interests');
+    }
+    
+    const text = data.candidates[0].content.parts[0].text.trim();
+    
+    // Extract JSON array from text response
+    try {
+      // Find anything that looks like a JSON array in the response
+      const jsonMatch = text.match(/\[\s*".*"\s*\]/s);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0]);
+      } else {
+        console.error('Could not extract JSON from Gemini response:', text);
+        return ['shorts']; // Return default as fallback
+      }
+    } catch (parseError) {
+      console.error('Error parsing interests JSON:', parseError, 'Text was:', text);
+      return ['shorts']; // Return default as fallback
+    }
+  } catch (error) {
+    console.error('Error generating interests with Gemini:', error);
+    return ['shorts']; // Return default interest
   }
 }
 
@@ -486,4 +586,3 @@ response = supabase.storage.from_("videos").upload(
 
 print(f"Video uploaded to Supabase storage: {response}")
 `;
-}

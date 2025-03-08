@@ -1,12 +1,14 @@
-
 import { VideoData, ShortVideo } from '@/types/video';
 import { supabase } from '@/integrations/supabase/client';
 
-// Fetch trending videos from YouTube (via our Edge Function)
-const fetchTrendingVideos = async (): Promise<ShortVideo[]> => {
+// Fetch trending videos from YouTube (via our Edge Function) based on user preferences
+const fetchTrendingVideos = async (userEmail?: string): Promise<ShortVideo[]> => {
   try {
     const { data, error } = await supabase.functions.invoke('youtube-summarize', {
-      body: { youtubeUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' } // Any valid URL to trigger the function
+      body: { 
+        youtubeUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', // Any valid URL to trigger the function
+        userEmail // Pass the user email to get personalized recommendations
+      }
     });
     
     if (error) throw error;
@@ -86,7 +88,7 @@ export const getRelatedVideos = async (currentVideoId: string): Promise<VideoDat
   }
 };
 
-export const getAllVideos = async (): Promise<VideoData[]> => {
+export const getAllVideos = async (userEmail?: string): Promise<VideoData[]> => {
   try {
     // Try to get videos from database
     const { data: shortVideos, error } = await supabase
@@ -99,8 +101,8 @@ export const getAllVideos = async (): Promise<VideoData[]> => {
       return shortVideos.map(convertShortVideoToVideoData);
     }
     
-    // If no videos in database, fetch trending videos
-    const trendingVideos = await fetchTrendingVideos();
+    // If no videos in database, fetch personalized trending videos
+    const trendingVideos = await fetchTrendingVideos(userEmail);
     
     if (trendingVideos && trendingVideos.length > 0) {
       // Get the stored videos after fetching trends
