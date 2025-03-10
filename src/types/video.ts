@@ -35,3 +35,13 @@ export interface ShortVideo {
   created_at: string;
   updated_at: string;
 }
+
+export interface VideoCompilation {
+  id: string;
+  title: string;
+  status: 'processing' | 'completed' | 'error';
+  instructions?: any;
+  video_url?: string;
+  created_at: string;
+  updated_at: string;
+}

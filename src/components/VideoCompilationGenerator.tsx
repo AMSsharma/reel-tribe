@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Loader2, Video, Film } from "lucide-react";
 import VideoPlayer from './VideoPlayer';
-import { generateVideoCompilation, getCompilationStatus } from '@/services/videoService';
+import { generateVideoCompilation, getCompilationStatus } from '@/services/compilationService';
 import { useAuth } from '@/contexts/AuthContext';
 
 const VideoCompilationGenerator: React.FC = () => {
