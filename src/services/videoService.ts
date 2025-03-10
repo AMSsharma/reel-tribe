@@ -1,3 +1,4 @@
+
 import { VideoData, ShortVideo } from '@/types/video';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -39,6 +40,62 @@ const fetchTrendingVideos = async (userEmail?: string): Promise<ShortVideo[]> =>
   } catch (error) {
     console.error('Error fetching trending videos:', error);
     return [];
+  }
+};
+
+// Process a video to create a summary and short clips
+export const processYouTubeVideo = async (youtubeUrl: string, userEmail?: string): Promise<{
+  success: boolean;
+  videoId?: string;
+  videoDetails?: any;
+  summary?: string;
+  timestamps?: any[];
+  processingInstructions?: any;
+  error?: string;
+}> => {
+  try {
+    const { data, error } = await supabase.functions.invoke('youtube-summarize', {
+      body: { 
+        youtubeUrl,
+        userEmail
+      }
+    });
+    
+    if (error) throw error;
+    
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to process video');
+    }
+    
+    // If we have video details, store the processed video in our database
+    if (data.videoDetails) {
+      await storeProcessedVideo({
+        youtubeId: data.videoId,
+        title: data.videoDetails.title,
+        description: data.videoDetails.description,
+        thumbnailUrl: data.videoDetails.thumbnailUrl,
+        channel: data.videoDetails.channel,
+        publishedAt: data.videoDetails.publishedAt,
+        viewCount: parseInt(data.videoDetails.viewCount),
+        likeCount: parseInt(data.videoDetails.likeCount),
+        summary: data.summary
+      });
+    }
+    
+    return {
+      success: true,
+      videoId: data.videoId,
+      videoDetails: data.videoDetails,
+      summary: data.summary,
+      timestamps: data.timestamps,
+      processingInstructions: data.processingInstructions
+    };
+  } catch (error) {
+    console.error('Error processing YouTube video:', error);
+    return {
+      success: false,
+      error: error.message || 'An unknown error occurred'
+    };
   }
 };
 

@@ -8,12 +8,25 @@ import { Card } from "@/components/ui/card";
 import { Loader2, Share, Clock, Code, Video } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import VideoPlayer from './VideoPlayer';
-import { storeProcessedVideo } from '@/services/videoService';
+import { storeProcessedVideo, processYouTubeVideo } from '@/services/videoService';
 
 interface Timestamp {
   time: string;
   description: string;
   reason: string;
+}
+
+interface ProcessingInstructions {
+  videoId: string;
+  videoTitle: string;
+  videoUrl: string;
+  segments: {
+    startTime: string;
+    duration: string;
+    description: string;
+  }[];
+  processingSteps: string[];
+  processingCode: string;
 }
 
 interface SummaryResult {
@@ -31,7 +44,7 @@ interface SummaryResult {
   };
   summary: string;
   timestamps: Timestamp[];
-  processingDescription?: string;
+  processingInstructions: ProcessingInstructions;
 }
 
 const YouTubeSummarizer: React.FC = () => {
@@ -53,17 +66,20 @@ const YouTubeSummarizer: React.FC = () => {
     setLoading(true);
     
     try {
-      const { data, error } = await supabase.functions.invoke('youtube-summarize', {
-        body: { youtubeUrl: url }
-      });
+      const response = await processYouTubeVideo(url);
       
-      if (error) throw error;
-      
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to process video');
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to process video');
       }
       
-      setResult(data);
+      setResult({
+        videoId: response.videoId!,
+        videoDetails: response.videoDetails,
+        summary: response.summary!,
+        timestamps: response.timestamps || [],
+        processingInstructions: response.processingInstructions
+      });
+      
       setUrl('');
       
       toast({
@@ -199,6 +215,41 @@ const YouTubeSummarizer: React.FC = () => {
             )}
             
             <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+              <h4 className="font-medium mb-2 flex items-center">
+                <Video className="mr-2 h-4 w-4" />
+                Processing Segments:
+              </h4>
+              
+              {result.processingInstructions && result.processingInstructions.segments && (
+                <div className="mb-4">
+                  <div className="grid grid-cols-1 gap-2 mb-4">
+                    {result.processingInstructions.segments.map((segment, index) => (
+                      <div 
+                        key={index} 
+                        className="flex items-center bg-gray-100 dark:bg-gray-700/50 p-2 rounded-lg"
+                      >
+                        <div className="mr-2 w-16 text-xs font-mono bg-gray-200 dark:bg-gray-600 p-1 rounded text-center">
+                          {segment.startTime}
+                        </div>
+                        <div className="mr-2 w-16 text-xs font-mono bg-gray-200 dark:bg-gray-600 p-1 rounded text-center">
+                          {segment.duration}
+                        </div>
+                        <div className="text-sm flex-1">{segment.description}</div>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  <div className="bg-gray-100 dark:bg-gray-700/50 p-3 rounded-lg mb-4">
+                    <h5 className="text-sm font-medium mb-2">Processing Steps:</h5>
+                    <ol className="list-decimal list-inside text-sm space-y-1">
+                      {result.processingInstructions.processingSteps.map((step, index) => (
+                        <li key={index}>{step}</li>
+                      ))}
+                    </ol>
+                  </div>
+                </div>
+              )}
+              
               <Button
                 variant="outline"
                 size="sm"
@@ -209,16 +260,16 @@ const YouTubeSummarizer: React.FC = () => {
                 {showCode ? 'Hide Processing Code' : 'Show Processing Code'}
               </Button>
               
-              {showCode && result.processingDescription && (
+              {showCode && result.processingInstructions && result.processingInstructions.processingCode && (
                 <div className="bg-black/90 text-green-400 p-4 rounded-md font-mono text-xs overflow-x-auto">
-                  <pre>{result.processingDescription}</pre>
+                  <pre>{result.processingInstructions.processingCode}</pre>
                 </div>
               )}
               
               <div className="flex items-center gap-2 mt-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800/30 rounded-md">
                 <Video className="h-5 w-5 text-yellow-500" />
                 <p className="text-sm text-yellow-700 dark:text-yellow-400">
-                  Video processing is simulated. In a production environment, this would trigger a backend process to extract and compile the clips based on the timestamps.
+                  Video processing is simulated. In a production environment, this would trigger a process to extract and compile the clips based on the timestamps using FFmpeg.
                 </p>
               </div>
             </div>
