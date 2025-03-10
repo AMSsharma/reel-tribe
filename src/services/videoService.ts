@@ -1,6 +1,7 @@
 
 import { VideoData, ShortVideo } from '@/types/video';
 import { supabase } from '@/integrations/supabase/client';
+import { convertShortVideoToVideoData } from '@/utils/videoConverter';
 
 // Fetch trending videos from YouTube (via our Edge Function) based on user preferences
 const fetchTrendingVideos = async (userEmail?: string): Promise<ShortVideo[]> => {
@@ -43,62 +44,6 @@ const fetchTrendingVideos = async (userEmail?: string): Promise<ShortVideo[]> =>
   }
 };
 
-// Process a video to create a summary and short clips
-export const processYouTubeVideo = async (youtubeUrl: string, userEmail?: string): Promise<{
-  success: boolean;
-  videoId?: string;
-  videoDetails?: any;
-  summary?: string;
-  timestamps?: any[];
-  processingInstructions?: any;
-  error?: string;
-}> => {
-  try {
-    const { data, error } = await supabase.functions.invoke('youtube-summarize', {
-      body: { 
-        youtubeUrl,
-        userEmail
-      }
-    });
-    
-    if (error) throw error;
-    
-    if (!data.success) {
-      throw new Error(data.error || 'Failed to process video');
-    }
-    
-    // If we have video details, store the processed video in our database
-    if (data.videoDetails) {
-      await storeProcessedVideo({
-        youtubeId: data.videoId,
-        title: data.videoDetails.title,
-        description: data.videoDetails.description,
-        thumbnailUrl: data.videoDetails.thumbnailUrl,
-        channel: data.videoDetails.channel,
-        publishedAt: data.videoDetails.publishedAt,
-        viewCount: parseInt(data.videoDetails.viewCount),
-        likeCount: parseInt(data.videoDetails.likeCount),
-        summary: data.summary
-      });
-    }
-    
-    return {
-      success: true,
-      videoId: data.videoId,
-      videoDetails: data.videoDetails,
-      summary: data.summary,
-      timestamps: data.timestamps,
-      processingInstructions: data.processingInstructions
-    };
-  } catch (error) {
-    console.error('Error processing YouTube video:', error);
-    return {
-      success: false,
-      error: error.message || 'An unknown error occurred'
-    };
-  }
-};
-
 export const getVideoById = async (id: string): Promise<VideoData | null> => {
   try {
     // First check if this is a processed short video from our database
@@ -113,7 +58,6 @@ export const getVideoById = async (id: string): Promise<VideoData | null> => {
     }
     
     console.error('Video not found in database, using mock data');
-    // Fall back to mock data if not found in database
     return null;
   } catch (error) {
     console.error('Error fetching video:', error);
@@ -182,66 +126,4 @@ export const getAllVideos = async (userEmail?: string): Promise<VideoData[]> => 
   }
 };
 
-// Helper function to convert ShortVideo from Supabase to VideoData format
-const convertShortVideoToVideoData = (shortVideo: ShortVideo): VideoData => {
-  return {
-    id: shortVideo.id,
-    title: shortVideo.title,
-    creator: {
-      id: `creator-${shortVideo.youtube_id}`,
-      name: shortVideo.channel,
-      avatar: `https://i.pravatar.cc/150?u=${shortVideo.youtube_id}`,
-    },
-    videoUrl: shortVideo.preview_url || `https://www.youtube.com/embed/${shortVideo.youtube_id}`,
-    thumbnailUrl: shortVideo.thumbnail_url || 'https://i.imgur.com/A8eQsll.jpg',
-    youtubeUrl: `https://www.youtube.com/watch?v=${shortVideo.youtube_id}`,
-    description: shortVideo.description || undefined,
-    youtubeId: shortVideo.youtube_id,
-    viewCount: shortVideo.view_count || undefined,
-    likeCount: shortVideo.like_count || undefined,
-    publishedAt: shortVideo.published_at || undefined,
-    summary: shortVideo.summary || undefined,
-  };
-};
-
-// Store processed videos in our database
-export const storeProcessedVideo = async (videoData: {
-  youtubeId: string;
-  title: string;
-  description?: string;
-  thumbnailUrl?: string;
-  channel: string;
-  previewUrl?: string;
-  publishedAt?: string;
-  viewCount?: number;
-  likeCount?: number;
-  summary?: string;
-}): Promise<{ success: boolean; id?: string; error?: any }> => {
-  try {
-    const { data, error } = await supabase
-      .from('short_videos')
-      .upsert({
-        youtube_id: videoData.youtubeId,
-        title: videoData.title,
-        description: videoData.description || null,
-        thumbnail_url: videoData.thumbnailUrl || null,
-        channel: videoData.channel,
-        preview_url: videoData.previewUrl || null,
-        published_at: videoData.publishedAt || null,
-        view_count: videoData.viewCount || null,
-        like_count: videoData.likeCount || null,
-        summary: videoData.summary || null,
-      }, {
-        onConflict: 'youtube_id'
-      })
-      .select('id')
-      .single();
-    
-    if (error) throw error;
-    
-    return { success: true, id: data?.id };
-  } catch (error) {
-    console.error('Error storing processed video:', error);
-    return { success: false, error };
-  }
-};
+export { storeProcessedVideo } from './videoProcessingService';
